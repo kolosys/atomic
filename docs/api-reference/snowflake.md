@@ -108,7 +108,7 @@ func NewRandom(epoch int64) Snowflake
 Int64 converts the Snowflake to an int64.
 
 ```go
-func (Snowflake) Int64() (int64, error)
+func (Snowflake) Int64() int64
 ```
 
 **Parameters:**
@@ -116,7 +116,6 @@ func (Snowflake) Int64() (int64, error)
 
 **Returns:**
 - int64
-- error
 
 ### IsValid
 
@@ -151,7 +150,7 @@ func (Snowflake) String() string
 Time extracts the timestamp from the Snowflake.
 
 ```go
-func (Snowflake) Time() (time.Time, error)
+func (Snowflake) Time() time.Time
 ```
 
 **Parameters:**
@@ -159,7 +158,6 @@ func (Snowflake) Time() (time.Time, error)
 
 **Returns:**
 - time.Time
-- error
 
 ## External Links
 
