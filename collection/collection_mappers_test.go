@@ -551,3 +551,27 @@ func TestGroupBy(t *testing.T) {
 		t.Errorf("Index 2 group should contain [300], got %v", group2)
 	}
 }
+
+func TestDefaultSort(t *testing.T) {
+	// Test with strings
+	res := collection.DefaultSort("a", "b", "k1", "k2")
+	if res >= 0 {
+		t.Errorf("Expected negative for 'a' < 'b', got %d", res)
+	}
+
+	res = collection.DefaultSort("b", "a", "k1", "k2")
+	if res <= 0 {
+		t.Errorf("Expected positive for 'b' > 'a', got %d", res)
+	}
+
+	res = collection.DefaultSort("a", "a", "k1", "k2")
+	if res != 0 {
+		t.Errorf("Expected 0 for 'a' == 'a', got %d", res)
+	}
+
+	// Test with other types (toString returns "<Type Value>")
+	res = collection.DefaultSort(1, 2, "k1", "k2")
+	if res != 0 {
+		t.Errorf("Expected 0 for same type non-strings, got %d", res)
+	}
+}

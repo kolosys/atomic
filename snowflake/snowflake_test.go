@@ -13,10 +13,7 @@ func TestSnowflakeStringAndInt64(t *testing.T) {
 	if got := sf.String(); got != "123456789012345678" {
 		t.Errorf("String() = %s, want %s", got, "123456789012345678")
 	}
-	gotInt, err := sf.Int64()
-	if err != nil {
-		t.Errorf("Int64() returned error: %v", err)
-	}
+	gotInt := sf.Int64()
 	if gotInt != val {
 		t.Errorf("Int64() = %d, want %d", gotInt, val)
 	}
@@ -25,17 +22,14 @@ func TestSnowflakeStringAndInt64(t *testing.T) {
 func TestSnowflakeNewFromString(t *testing.T) {
 	val := "9876543210123456"
 	sf := NewFromString(val, DefaultEpoch)
-	expected, _ := NewFromString(val, DefaultEpoch).Int64()
-	got, err := sf.Int64()
-	if err != nil {
-		t.Errorf("Int64() returned error: %v", err)
-	}
+	expected := NewFromString(val, DefaultEpoch).Int64()
+	got := sf.Int64()
 	if got != expected {
 		t.Errorf("NewFromString(%s) = %d, want %d", val, got, expected)
 	}
 
 	bad := NewFromString("notanumber", DefaultEpoch)
-	gotBad, _ := bad.Int64()
+	gotBad := bad.Int64()
 	if gotBad != 0 {
 		t.Errorf("NewFromString with bad string should be zero, got %d", gotBad)
 	}
@@ -55,10 +49,7 @@ func TestSnowflakeTime(t *testing.T) {
 	// mimic snowflake: ((timestamp - epoch) << 22)
 	id := (nowMs - DefaultEpoch) << 22
 	sf := New(id, DefaultEpoch)
-	tm, err := sf.Time()
-	if err != nil {
-		t.Fatalf("Time() returned error: %v", err)
-	}
+	tm := sf.Time()
 	// Allow for a few seconds difference
 	timeout := time.Duration(5) * time.Second
 	if tm.Sub(time.UnixMilli(nowMs)) > timeout {
@@ -74,5 +65,14 @@ func TestIsValid(t *testing.T) {
 	sf0 := New(0, DefaultEpoch)
 	if sf0.IsValid() {
 		t.Errorf("IsValid() = true, want false")
+	}
+}
+
+func TestNewFromInt64(t *testing.T) {
+	val := int64(12345)
+	sf := NewFromInt64(val, DefaultEpoch)
+	got := sf.Int64()
+	if got != val {
+		t.Errorf("NewFromInt64(%d) = %d, want %d", val, got, val)
 	}
 }

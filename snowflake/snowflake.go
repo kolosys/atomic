@@ -23,8 +23,8 @@ func (s Snowflake) String() string {
 }
 
 // Int64 converts the Snowflake to an int64.
-func (s Snowflake) Int64() (int64, error) {
-	return s.value, nil
+func (s Snowflake) Int64() int64 {
+	return s.value
 }
 
 // New creates a new Snowflake from a string.
@@ -55,16 +55,13 @@ func NewRandom(epoch int64) Snowflake {
 }
 
 // Time extracts the timestamp from the Snowflake.
-func (s Snowflake) Time() (time.Time, error) {
-	id, err := s.Int64()
-	if err != nil {
-		return time.Time{}, err
-	}
+func (s Snowflake) Time() time.Time {
+	id := s.Int64()
 
 	// Extract timestamp from Snowflake
 	timestamp := (id >> 22) + DefaultEpoch
 
-	return time.Unix(timestamp/1000, (timestamp%1000)*1000000), nil
+	return time.Unix(timestamp/1000, (timestamp%1000)*1000000)
 }
 
 // IsValid checks if the Snowflake is a valid Snowflake.
