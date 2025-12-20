@@ -22,17 +22,24 @@ type Comparator[K comparable, V any] func(firstValue, secondValue V, firstKey, s
 type Collection[K comparable, V any] struct {
 	mu    sync.RWMutex
 	items map[K]V
+	keys  []K
 }
 
 // New creates a new Collection.
 func New[K comparable, V any]() *Collection[K, V] {
-	return &Collection[K, V]{items: make(map[K]V)}
+	return &Collection[K, V]{
+		items: make(map[K]V),
+		keys:  make([]K, 0),
+	}
 }
 
 // Set adds or updates an item in the collection.
 func (c *Collection[K, V]) Set(key K, value V) *Collection[K, V] {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if _, ok := c.items[key]; !ok {
+		c.keys = append(c.keys, key)
+	}
 	c.items[key] = value
 	return c
 }
@@ -57,9 +64,17 @@ func (c *Collection[K, V]) Has(key K) bool {
 func (c *Collection[K, V]) Delete(key K) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	_, existed := c.items[key]
-	delete(c.items, key)
-	return existed
+	if _, existed := c.items[key]; existed {
+		delete(c.items, key)
+		for i, k := range c.keys {
+			if k == key {
+				c.keys = append(c.keys[:i], c.keys[i+1:]...)
+				break
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // Clear removes all items from the collection.
@@ -67,6 +82,7 @@ func (c *Collection[K, V]) Clear() *Collection[K, V] {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.items = make(map[K]V)
+	c.keys = make([]K, 0)
 	return c
 }
 
@@ -88,9 +104,9 @@ func (c *Collection[K, V]) Keys() []K {
 func (c *Collection[K, V]) Values() []V {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	values := make([]V, 0, len(c.items))
-	for _, v := range c.items {
-		values = append(values, v)
+	values := make([]V, 0, len(c.keys))
+	for _, k := range c.keys {
+		values = append(values, c.items[k])
 	}
 	return values
 }
@@ -99,9 +115,9 @@ func (c *Collection[K, V]) Values() []V {
 func (c *Collection[K, V]) Entries() [][2]any {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	entries := make([][2]any, 0, len(c.items))
-	for k, v := range c.items {
-		entries = append(entries, [2]any{k, v})
+	entries := make([][2]any, 0, len(c.keys))
+	for _, k := range c.keys {
+		entries = append(entries, [2]any{k, c.items[k]})
 	}
 	return entries
 }
@@ -111,9 +127,11 @@ func (c *Collection[K, V]) Clone() *Collection[K, V] {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	clone := New[K, V]()
-	for k, v := range c.items {
-		clone.items[k] = v
+	for _, k := range c.keys {
+		clone.items[k] = c.items[k]
 	}
+	clone.keys = make([]K, len(c.keys))
+	copy(clone.keys, c.keys)
 	return clone
 }
 
@@ -360,15 +378,9 @@ func (c *Collection[K, V]) RandomKey(amount ...int) any {
 func (c *Collection[K, V]) Reverse() *Collection[K, V] {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	keys := c.keysUnlocked()
-	for i, j := 0, len(keys)-1; i < j; i, j = i+1, j-1 {
-		keys[i], keys[j] = keys[j], keys[i]
+	for i, j := 0, len(c.keys)-1; i < j; i, j = i+1, j-1 {
+		c.keys[i], c.keys[j] = c.keys[j], c.keys[i]
 	}
-	newItems := make(map[K]V, len(c.items))
-	for _, k := range keys {
-		newItems[k] = c.items[k]
-	}
-	c.items = newItems
 	return c
 }
 
@@ -376,7 +388,8 @@ func (c *Collection[K, V]) Reverse() *Collection[K, V] {
 func (c *Collection[K, V]) Find(fn func(value V, key K, collection *Collection[K, V]) bool) (V, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	for k, v := range c.items {
+	for _, k := range c.keys {
+		v := c.items[k]
 		if fn(v, k, c) {
 			return v, true
 		}
@@ -389,7 +402,8 @@ func (c *Collection[K, V]) Find(fn func(value V, key K, collection *Collection[K
 func (c *Collection[K, V]) FindKey(fn func(value V, key K, collection *Collection[K, V]) bool) (K, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	for k, v := range c.items {
+	for _, k := range c.keys {
+		v := c.items[k]
 		if fn(v, k, c) {
 			return k, true
 		}
@@ -435,10 +449,15 @@ func (c *Collection[K, V]) Sweep(fn func(value V, key K, collection *Collection[
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	count := 0
-	for k, v := range c.items {
+	for i := 0; i < len(c.keys); {
+		k := c.keys[i]
+		v := c.items[k]
 		if fn(v, k, c) {
 			delete(c.items, k)
+			c.keys = append(c.keys[:i], c.keys[i+1:]...)
 			count++
+		} else {
+			i++
 		}
 	}
 	return count
@@ -449,9 +468,10 @@ func (c *Collection[K, V]) Filter(fn func(value V, key K, collection *Collection
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	res := New[K, V]()
-	for k, v := range c.items {
+	for _, k := range c.keys {
+		v := c.items[k]
 		if fn(v, k, c) {
-			res.items[k] = v
+			res.Set(k, v)
 		}
 	}
 	return res
@@ -463,11 +483,12 @@ func (c *Collection[K, V]) Partition(fn func(value V, key K, collection *Collect
 	defer c.mu.RUnlock()
 	pass := New[K, V]()
 	fail := New[K, V]()
-	for k, v := range c.items {
+	for _, k := range c.keys {
+		v := c.items[k]
 		if fn(v, k, c) {
-			pass.items[k] = v
+			pass.Set(k, v)
 		} else {
-			fail.items[k] = v
+			fail.Set(k, v)
 		}
 	}
 	return pass, fail
@@ -478,11 +499,14 @@ func (c *Collection[K, V]) FlatMap(fn func(value V, key K, collection *Collectio
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	result := New[K, V]()
-	for k, v := range c.items {
+	for _, k := range c.keys {
+		v := c.items[k]
 		sub := fn(v, k, c)
-		for subk, subv := range sub.items {
-			result.items[subk] = subv
+		sub.mu.RLock()
+		for _, subk := range sub.keys {
+			result.Set(subk, sub.items[subk])
 		}
+		sub.mu.RUnlock()
 	}
 	return result
 }
@@ -491,8 +515,8 @@ func (c *Collection[K, V]) FlatMap(fn func(value V, key K, collection *Collectio
 func (c *Collection[K, V]) Some(fn func(value V, key K, collection *Collection[K, V]) bool) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	for k, v := range c.items {
-		if fn(v, k, c) {
+	for _, k := range c.keys {
+		if fn(c.items[k], k, c) {
 			return true
 		}
 	}
@@ -503,8 +527,8 @@ func (c *Collection[K, V]) Some(fn func(value V, key K, collection *Collection[K
 func (c *Collection[K, V]) Every(fn func(value V, key K, collection *Collection[K, V]) bool) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	for k, v := range c.items {
-		if !fn(v, k, c) {
+	for _, k := range c.keys {
+		if !fn(c.items[k], k, c) {
 			return false
 		}
 	}
@@ -515,8 +539,8 @@ func (c *Collection[K, V]) Every(fn func(value V, key K, collection *Collection[
 func (c *Collection[K, V]) Each(fn func(value V, key K, collection *Collection[K, V])) *Collection[K, V] {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	for k, v := range c.items {
-		fn(v, k, c)
+	for _, k := range c.keys {
+		fn(c.items[k], k, c)
 	}
 	return c
 }
@@ -532,8 +556,8 @@ func (c *Collection[K, V]) Concat(collections ...*Collection[K, V]) *Collection[
 	result := c.Clone()
 	for _, coll := range collections {
 		coll.mu.RLock()
-		for k, v := range coll.items {
-			result.items[k] = v
+		for _, k := range coll.keys {
+			result.Set(k, coll.items[k])
 		}
 		coll.mu.RUnlock()
 	}
@@ -552,7 +576,8 @@ func (c *Collection[K, V]) Equals(other *Collection[K, V]) bool {
 	if len(c.items) != len(other.items) {
 		return false
 	}
-	for k, v := range c.items {
+	for _, k := range c.keys {
+		v := c.items[k]
 		ov, ok := other.items[k]
 		if !ok || !reflect.DeepEqual(v, ov) {
 			return false
@@ -565,15 +590,9 @@ func (c *Collection[K, V]) Equals(other *Collection[K, V]) bool {
 func (c *Collection[K, V]) Sort(compare Comparator[K, V]) *Collection[K, V] {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	keys := c.keysUnlocked()
-	sort.SliceStable(keys, func(i, j int) bool {
-		return compare(c.items[keys[i]], c.items[keys[j]], keys[i], keys[j]) < 0
+	sort.SliceStable(c.keys, func(i, j int) bool {
+		return compare(c.items[c.keys[i]], c.items[c.keys[j]], c.keys[i], c.keys[j]) < 0
 	})
-	newItems := make(map[K]V, len(c.items))
-	for _, k := range keys {
-		newItems[k] = c.items[k]
-	}
-	c.items = newItems
 	return c
 }
 
@@ -584,9 +603,10 @@ func (c *Collection[K, V]) Intersection(other *Collection[K, any]) *Collection[K
 	other.mu.RLock()
 	defer other.mu.RUnlock()
 	res := New[K, V]()
-	for k, v := range c.items {
+	for _, k := range c.keys {
+		v := c.items[k]
 		if _, ok := other.items[k]; ok {
-			res.items[k] = v
+			res.Set(k, v)
 		}
 	}
 	return res
@@ -599,9 +619,10 @@ func (c *Collection[K, V]) Union(other *Collection[K, V]) *Collection[K, V] {
 	other.mu.RLock()
 	defer other.mu.RUnlock()
 	res := c.Clone()
-	for k, v := range other.items {
+	for _, k := range other.keys {
+		v := other.items[k]
 		if _, ok := res.items[k]; !ok {
-			res.items[k] = v
+			res.Set(k, v)
 		}
 	}
 	return res
@@ -614,9 +635,10 @@ func (c *Collection[K, V]) Difference(other *Collection[K, any]) *Collection[K, 
 	other.mu.RLock()
 	defer other.mu.RUnlock()
 	res := New[K, V]()
-	for k, v := range c.items {
+	for _, k := range c.keys {
+		v := c.items[k]
 		if _, ok := other.items[k]; !ok {
-			res.items[k] = v
+			res.Set(k, v)
 		}
 	}
 	return res
@@ -629,14 +651,16 @@ func (c *Collection[K, V]) SymmetricDifference(other *Collection[K, V]) *Collect
 	other.mu.RLock()
 	defer other.mu.RUnlock()
 	res := New[K, V]()
-	for k, v := range c.items {
+	for _, k := range c.keys {
+		v := c.items[k]
 		if _, ok := other.items[k]; !ok {
-			res.items[k] = v
+			res.Set(k, v)
 		}
 	}
-	for k, v := range other.items {
+	for _, k := range other.keys {
+		v := other.items[k]
 		if _, ok := c.items[k]; !ok {
-			res.items[k] = v
+			res.Set(k, v)
 		}
 	}
 	return res
@@ -656,18 +680,16 @@ func (c *Collection[K, V]) ToSorted(compare Comparator[K, V]) *Collection[K, V] 
 func (c *Collection[K, V]) ToJSON() ([]byte, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	pairs := make([][2]any, 0, len(c.items))
-	for k, v := range c.items {
-		pairs = append(pairs, [2]any{k, v})
+	pairs := make([][2]any, 0, len(c.keys))
+	for _, k := range c.keys {
+		pairs = append(pairs, [2]any{k, c.items[k]})
 	}
 	return json.Marshal(pairs)
 }
 
-// keysUnlocked returns the keys in insertion order. (Go maps are unordered, so this is not guaranteed.)
+// keysUnlocked returns the keys in insertion order.
 func (c *Collection[K, V]) keysUnlocked() []K {
-	keys := make([]K, 0, len(c.items))
-	for k := range c.items {
-		keys = append(keys, k)
-	}
+	keys := make([]K, len(c.keys))
+	copy(keys, c.keys)
 	return keys
 }

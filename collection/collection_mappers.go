@@ -4,10 +4,10 @@ import "reflect"
 
 // Map returns a slice of values produced by applying fn to each item.
 func MapCollection[K comparable, V, R any](c *Collection[K, V], fn func(value V, key K, collection *Collection[K, V]) R) []R {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	res := make([]R, 0, len(c.items))
-	for k, v := range c.items {
+	keys := c.Keys()
+	res := make([]R, 0, len(keys))
+	for _, k := range keys {
+		v, _ := c.Get(k)
 		res = append(res, fn(v, k, c))
 	}
 	return res
@@ -15,21 +15,21 @@ func MapCollection[K comparable, V, R any](c *Collection[K, V], fn func(value V,
 
 // MapValues returns a new collection with the same keys but values mapped by fn.
 func MapCollectionValues[K comparable, V, R any](c *Collection[K, V], fn func(value V, key K, collection *Collection[K, V]) R) *Collection[K, R] {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	keys := c.Keys()
 	res := New[K, R]()
-	for k, v := range c.items {
-		res.items[k] = fn(v, k, c)
+	for _, k := range keys {
+		v, _ := c.Get(k)
+		res.Set(k, fn(v, k, c))
 	}
 	return res
 }
 
 // Reduce applies a function to produce a single value.
 func ReduceCollection[K comparable, V, R any](c *Collection[K, V], fn func(accumulator R, value V, key K, collection *Collection[K, V]) R, initialValue R) R {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	keys := c.Keys()
 	acc := initialValue
-	for k, v := range c.items {
+	for _, k := range keys {
+		v, _ := c.Get(k)
 		acc = fn(acc, v, k, c)
 	}
 	return acc
@@ -57,36 +57,42 @@ func MergeCollection[K comparable, V, O, R any](
 	whenInOther func(valueOther O, key K) Keep[R],
 	whenInBoth func(value V, valueOther O, key K) Keep[R],
 ) *Collection[K, R] {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	other.mu.RLock()
-	defer other.mu.RUnlock()
 	res := New[K, R]()
-	keys := make(map[K]struct{})
-	for k := range c.items {
-		keys[k] = struct{}{}
+	keysInSelf := c.Keys()
+	keysInOther := other.Keys()
+
+	seen := make(map[K]struct{})
+	allKeys := make([]K, 0, len(keysInSelf)+len(keysInOther))
+
+	for _, k := range keysInSelf {
+		allKeys = append(allKeys, k)
+		seen[k] = struct{}{}
 	}
-	for k := range other.items {
-		keys[k] = struct{}{}
+	for _, k := range keysInOther {
+		if _, ok := seen[k]; !ok {
+			allKeys = append(allKeys, k)
+			seen[k] = struct{}{}
+		}
 	}
-	for k := range keys {
-		_, inSelf := c.items[k]
-		_, inOther := other.items[k]
+
+	for _, k := range allKeys {
+		v, inSelf := c.Get(k)
+		vo, inOther := other.Get(k)
 		switch {
 		case inSelf && inOther:
-			keep := whenInBoth(c.items[k], other.items[k], k)
+			keep := whenInBoth(v, vo, k)
 			if keep.Keep {
-				res.items[k] = keep.Value
+				res.Set(k, keep.Value)
 			}
 		case inSelf:
-			keep := whenInSelf(c.items[k], k)
+			keep := whenInSelf(v, k)
 			if keep.Keep {
-				res.items[k] = keep.Value
+				res.Set(k, keep.Value)
 			}
 		case inOther:
-			keep := whenInOther(other.items[k], k)
+			keep := whenInOther(vo, k)
 			if keep.Keep {
-				res.items[k] = keep.Value
+				res.Set(k, keep.Value)
 			}
 		}
 	}
@@ -115,10 +121,10 @@ func CombineEntries[K comparable, V any](
 	for _, entry := range entries {
 		k := entry[0].(K)
 		v := entry[1].(V)
-		if old, ok := coll.items[k]; ok {
-			coll.items[k] = combine(old, v, k)
+		if old, ok := coll.Get(k); ok {
+			coll.Set(k, combine(old, v, k))
 		} else {
-			coll.items[k] = v
+			coll.Set(k, v)
 		}
 	}
 	return coll
@@ -129,7 +135,8 @@ func GroupBy[K comparable, Item any](items []Item, keySelector func(item Item, i
 	res := New[K, []Item]()
 	for i, item := range items {
 		k := keySelector(item, i)
-		res.items[k] = append(res.items[k], item)
+		current, _ := res.Get(k)
+		res.Set(k, append(current, item))
 	}
 	return res
 }
