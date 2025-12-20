@@ -1,0 +1,60 @@
+# Overview
+
+A collection of thread-safe, generic data structures and utilities for Go. Built with modern Go generics and designed for concurrent applications.
+
+## About atomic
+
+This documentation provides comprehensive guidance for using atomic, a Go library designed to help you build better software.
+
+## Project Information
+
+- **Repository**: [https://github.com/kolosys/atomic](https://github.com/kolosys/atomic)
+- **Import Path**: `github.com/kolosys/atomic`
+- **License**: MIT
+- **Version**: latest
+
+## What You'll Find Here
+
+This documentation is organized into several sections to help you find what you need:
+
+- **[Getting Started](../getting-started/)** - Installation instructions and quick start guides
+- **[Core Concepts](../core-concepts/)** - Fundamental concepts and architecture details
+- **[Advanced Topics](../advanced/)** - Performance tuning and advanced usage patterns
+- **[API Reference](../api-reference/)** - Complete API reference documentation
+- **[Examples](../examples/)** - Working code examples and tutorials
+
+## Project Features
+
+atomic provides:
+- **atomic** - Atomic
+Providing micro-optimized packages
+
+- **collection** - 
+- **snowflake** - 
+
+## Quick Links
+
+- [Installation Guide](installation.md)
+- [Quick Start Guide](quick-start.md)
+- [API Reference](../api-reference/)
+- [Examples](../examples/README.md)
+
+## Community & Support
+
+- **GitHub Issues**: [https://github.com/kolosys/atomic/issues](https://github.com/kolosys/atomic/issues)
+- **Discussions**: [https://github.com/kolosys/atomic/discussions](https://github.com/kolosys/atomic/discussions)
+- **Repository Owner**: [kolosys](https://github.com/kolosys)
+
+## Getting Help
+
+If you encounter any issues or have questions:
+
+1. Check the [API Reference](../api-reference/) for detailed documentation
+2. Browse the [Examples](../examples/README.md) for common use cases
+3. Search existing [GitHub Issues](https://github.com/kolosys/atomic/issues)
+4. Open a new issue if you've found a bug or have a feature request
+
+## Next Steps
+
+Ready to get started? Head over to the [Installation Guide](installation.md) to begin using atomic.
+
